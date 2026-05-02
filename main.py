@@ -19,10 +19,11 @@ import sys
 import xml.etree.ElementTree as ET
 import yaml
 
-if os.path.isdir('/app/config'):
-    config_path = '/app/config/config.yml'
-else:
-    config_path = 'config.yml'
+def resolve_config_dir():
+    if os.path.isdir('/app/config'):
+        return '/app/config'
+    else:
+        return '.'
 
 TYPE_MAP = {
     'movie': ('movie', 'Video'),
@@ -33,7 +34,10 @@ class StoreTrueIfFlagPresent(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, True)
 
-def set_logger(log_level):
+def set_logger(log_level, config_dir=None):
+    if config_dir is None:
+        config_dir = resolve_config_dir()
+
     if not os.path.exists('logs'):
         os.makedirs('logs')
 
@@ -45,6 +49,7 @@ def set_logger(log_level):
         os.remove(oldest_file)
         print(f"Deleted: {oldest_file}")
 
+    config_path = resolve_config_file_path(config_dir)
     with open(config_path, 'r', encoding='utf-8') as file:
         config_content = file.read()
         config = yaml.safe_load(config_content)
@@ -180,22 +185,26 @@ CONFIG_PLACEHOLDER = dedent("""
 """).strip()
 
 
-def resolve_env_file_path():
-    return '/app/config/.env' if os.path.isdir('/app/config') else '.env'
+def resolve_env_file_path(config_dir=None):
+    if config_dir is None:
+        config_dir = resolve_config_dir()
+    return os.path.join(config_dir, '.env')
 
-def resolve_config_file_path():
-    return '/app/config/config.yml' if os.path.isdir('/app/config') else 'config.yml'
+def resolve_config_file_path(config_dir=None):
+    if config_dir is None:
+        config_dir = resolve_config_dir()
+    return os.path.join(config_dir, 'config.yml')
 
-def required_file_specs():
+def required_file_specs(config_dir=None):
     return (
         {
-            'path': resolve_env_file_path(),
+            'path': resolve_env_file_path(config_dir),
             'name': '.env',
             'content': ENV_PLACEHOLDER,
             'env_vars': ('PLEX_URL', 'PLEX_TOKEN'),
         },
         {
-            'path': resolve_config_file_path(),
+            'path': resolve_config_file_path(config_dir),
             'name': 'config.yml',
             'content': CONFIG_PLACEHOLDER,
             'env_vars': (),
@@ -216,8 +225,8 @@ def create_placeholder(spec):
     print(f"{spec['path']} created. Please populate it and rerun the script.")
     sys.exit()
 
-def ensure_files_exist():
-    for spec in required_file_specs():
+def ensure_files_exist(config_dir=None):
+    for spec in required_file_specs(config_dir):
         if spec.get('env_vars') and not missing_env_variables(spec):
             continue
 
@@ -715,14 +724,17 @@ def sanitize_filename(filename):
 def str_to_bool(value):
     return str(value).lower() in ("1", "true", "yes", "on")
 
-def load_configuration():
-    if os.path.exists('/app/config/.env'):
-        load_dotenv('/app/config/.env')
-    else:
-        load_dotenv()
+def load_configuration(config_dir=None):
+    if config_dir is None:
+        config_dir = resolve_config_dir()
+
+    env_path = resolve_env_file_path(config_dir)
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
 
     yaml.SafeLoader.add_constructor('!env_var', env_var_constructor)
 
+    config_path = resolve_config_file_path(config_dir)
     with open(config_path, 'r', encoding='utf-8') as file:
         config_content = file.read()
         config_content = re.sub(r'\$\{(\w+)\}', lambda match: os.getenv(match.group(1), ''), config_content)
@@ -1022,8 +1034,8 @@ def print_library_summary(library_result, exports):
                 f"\nEpisode NFO Files\n  - Added     : {summary['episode_nfo_new']} episode NFO(s)\n  - Updated   : {summary['episode_nfo_updated']} episode NFO(s)\n  - Skipped   : {summary['episode_nfo_skipped']} episode NFO(s)\n  - Failed    : {summary['episode_nfo_failure']} episode NFO(s)"
             )
 
-def main(args, log_name):
-    config = load_configuration()
+def main(args, log_name, config_dir=None):
+    config = load_configuration(config_dir)
 
     token, library_names, blacklists, path_mapping = resolve_base_settings(args, config)
 
@@ -1096,9 +1108,13 @@ if __name__ == '__main__':
 
     parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "CRITICAL", "VERBOSE"], type=str.upper, default=None)
 
+    parser.add_argument("--config", "-c", help="Path to config directory containing config.yml and .env (optional, defaults to auto-detect)")
+
     args = parser.parse_args()
     log_level = args.log_level
 
-    ensure_files_exist() 
-    logger, log_name = set_logger(log_level)
-    main(args, log_name)
+    resolved_config_dir = args.config if args.config is not None else resolve_config_dir()
+
+    ensure_files_exist(resolved_config_dir) 
+    logger, log_name = set_logger(log_level, resolved_config_dir)
+    main(args, log_name, resolved_config_dir)
