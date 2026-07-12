@@ -1,17 +1,21 @@
 name: Build and Push Docker image
 
 # Publishes healzangels/plex_nfo_exporter_options to Docker Hub.
-# Triggers:
-#   - push to main            -> tags :latest (and :main-<sha>)
-#   - push of a version tag   -> tags :X.Y.Z, :X.Y, :latest  (e.g. git tag v2.2)
-#   - manual run              -> via the "Run workflow" button
+#
+# Branch model:
+#   nightly branch  -> :nightly   (development; all changes land here first)
+#   main branch     -> :latest    (release / promoted from nightly)
+#   vX.Y.Z git tag  -> :X.Y.Z, :X.Y, :latest   (versioned release, e.g. git tag v2.2.0)
+#   manual run      -> via the "Run workflow" button (workflow_dispatch)
+#
+# NOTE: version tags MUST be full SemVer (three parts). `v2.2` is invalid; use `v2.2.0`.
 on:
   push:
     branches:
       - main
+      - nightly
     tags:
       - 'v*.*.*'
-      - 'v*.*'
   workflow_dispatch:
 
 env:
@@ -41,11 +45,19 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          # We control :latest explicitly below, so disable the automatic behaviour.
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            # main branch (release) -> :latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # nightly branch (development) -> :nightly
+            type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/nightly' }}
+            # version tags like v2.2.0 -> :2.2.0 and :2.2
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=main-,enable={{is_default_branch}}
+            # a versioned release also updates :latest
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
