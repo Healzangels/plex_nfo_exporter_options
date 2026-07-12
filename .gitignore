@@ -156,3 +156,5 @@ cython_debug/
 
 *ipynb
 *copy.py
+# Claude Code local config
+.claude/

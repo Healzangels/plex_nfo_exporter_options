@@ -1,4 +1,10 @@
-# Plex NFO Exporter
+# Plex NFO Exporter (options fork)
+
+> **Fork note:** This is a maintained fork of [van-geaux/plex_nfo_exporter](https://github.com/van-geaux/plex_nfo_exporter).
+> It adds a `MEDIA_SERVER` environment variable that controls poster filenames:
+> `plex` (default) writes `poster.jpg` / `<title>_poster.jpg`, while `jellyfin` or `emby`
+> writes `cover.jpg` / `<title>_cover.jpg`. Everything else tracks upstream.
+> Docker images are published to [`healzangels/plex_nfo_exporter_options`](https://hub.docker.com/r/healzangels/plex_nfo_exporter_options).
 
 **Plex NFO Exporter** is a script that extracts metadata, posters, and background art from Plex and generates compatible files for use with other media servers like Jellyfin.  
 
@@ -48,7 +54,8 @@ docker run --rm \
   -e DRY_RUN=false \
   -e FORCE_OVERWRITE=false \
   -e LOG_LEVEL=INFO \
-  ghcr.io/van-geaux/plex_nfo_exporter:latest
+  -e MEDIA_SERVER=plex \
+  healzangels/plex_nfo_exporter_options:latest
 ```
 
 After first deployment, fill the generated `config.yml` and `.env` before restarting it again.
@@ -65,7 +72,7 @@ PLEX_TOKEN='super-scecret-token'
 ```yaml
 services:
   plex-nfo-exporter:
-    image: ghcr.io/van-geaux/plex_nfo_exporter:latest
+    image: healzangels/plex_nfo_exporter_options:latest
     user: 1000:100 # set this to match your media folder’s user and group ID. If left out, all files will be created as root
     environment:
       - TZ=Asia/Jakarta
@@ -76,6 +83,7 @@ services:
       - DRY_RUN=false # optional, will simulate actions without writing any files
       - FORCE_OVERWRITE=false # optional, force overwrite files without checking server metadata; overrides config.yml setting
       - LOG_LEVEL=VERBOSE # optional, if not set default to `INFO`, use `VERBOSE` to print detailed processing instead of only summary
+      - MEDIA_SERVER=plex # optional, `plex` (default) names posters `poster.jpg`; `jellyfin`/`emby` names them `cover.jpg`
     volumes:
       - /path/to/config:/app/config
       - /path/to/config/logs:/app/logs # optional, you need to create the logs folder if you want to mount it

@@ -30,6 +30,17 @@ TYPE_MAP = {
     'show': ('tvshow', 'Directory'),
 }
 
+# MEDIA_SERVER-based poster naming
+# MEDIA_SERVER=plex     -> use 'poster'
+# MEDIA_SERVER=jellyfin -> use 'cover'
+# MEDIA_SERVER=emby     -> use 'cover'
+MEDIA_SERVER = os.getenv("MEDIA_SERVER", "plex").strip().lower()
+if MEDIA_SERVER in ("jellyfin", "emby"):
+    POSTER_BASENAME = "cover"
+else:
+    POSTER_BASENAME = "poster"
+
+
 class StoreTrueIfFlagPresent(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, True)
@@ -375,18 +386,19 @@ def get_file_path(library_type, movie_filename_type, image_filename_type, media_
     else:
         nfo_path = os.path.join(media_path, f'{library_type}.nfo')
 
+    # Poster naming controlled by POSTER_BASENAME ("poster" vs "cover")
     if library_type == 'movie':
         if image_filename_type == 'title':
-            poster_path = os.path.join(media_path, f'{sanitized_title}_poster.jpg')
+            poster_path = os.path.join(media_path, f'{sanitized_title}_{POSTER_BASENAME}.jpg')
             fanart_path = os.path.join(media_path, f'{sanitized_title}_fanart.jpg')
         elif image_filename_type == 'filename':
-            poster_path = os.path.join(media_path, f'{file_name}_poster.jpg')
+            poster_path = os.path.join(media_path, f'{file_name}_{POSTER_BASENAME}.jpg')
             fanart_path = os.path.join(media_path, f'{file_name}_fanart.jpg')
         else:
-            poster_path = os.path.join(media_path, 'poster.jpg')
+            poster_path = os.path.join(media_path, f'{POSTER_BASENAME}.jpg')
             fanart_path = os.path.join(media_path, 'fanart.jpg')
     else:
-        poster_path = os.path.join(media_path, 'poster.jpg')
+        poster_path = os.path.join(media_path, f'{POSTER_BASENAME}.jpg')
         fanart_path = os.path.join(media_path, 'fanart.jpg')
 
     return nfo_path, poster_path, fanart_path
